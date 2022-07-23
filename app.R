@@ -30,7 +30,7 @@ data <- data %>%
 
 var.names <- setNames(colnames(data), c("Sex", "Length", "Diameter", "Height", "Whole Weight", "Shucked Weight", "Viscera Weight", "Shell Weight", "Age"))
 
-# define user-interface ----
+# define user-interface 
 ui <- dashboardPage(skin = "green",
   
   # header
@@ -39,7 +39,9 @@ ui <- dashboardPage(skin = "green",
   # sidebar
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Visualizations", tabName = "visualizations", icon = icon("search", lib = "glyphicon")),
+      menuItem("Data Exploration", tabName = "dataexploration", icon = icon("search", lib = "glyphicon")),
+      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon")),
+      menuItem("Interactive Visualization", tabName = "visualizations", icon = icon("hand-up", lib = "glyphicon")),
       menuItem("Data", tabName = "datatable", icon = icon("table"))
     )
   ),
@@ -53,7 +55,113 @@ ui <- dashboardPage(skin = "green",
     
     tabItems(
       
-      # visualizations tab
+      # data exploration ----
+      tabItem(tabName = "dataexploration",
+        fluidPage(
+          h1("Data Exploration & Visualization"),
+          h4("Box, Violin, Frequency, and Correlation Plots"),
+          br(),
+          # selection and options ----
+          column(width = 3,
+            # main selection ----
+            box(width = 12, title = "Select Visualization:",
+              selectInput(inputId = "viztype", label = NULL, 
+                          choices = c("Box Plots" = "box", "Frequency Plots" = "dist", 
+                                      "Violin Plots" = "violin", "Correlation Plot" = "corr"),
+                          selected = "corr")
+            ), # ----
+            
+            # histogram/area plot options ----
+            conditionalPanel(
+              condition = "input.viztype == 'dist'",
+              box(width = 12, title = "Plot Options:",
+                selectInput(inputId = "distvar", label = "Select measurement type:",
+                            choices = c("Lengths (mm)" = "m", "Weights (g)" = "w", "Age by Gender" = "a")),
+                radioButtons(inputId = "disttype", label = "Selection distribution type:",
+                             choices = c("Histogram" = "hist", "Area Plot" = "area"))
+              )
+            ), # ----
+            
+            # violin plot options 
+            conditionalPanel(
+              condition = "input.viztype == 'violin'",
+              box(width = 12, title = "Plot Options:",
+                  selectInput(inputId = "viovar", label = "Select measurement type:",
+                              choices = c("Lengths (mm)" = "m", "Weights (g)" = "w", "Age by Gender" = "a"))
+              )
+            ),
+            
+            # box plot options ----
+            conditionalPanel(
+              condition = "input.viztype == 'box'",
+              box(width = 12, title = "Plot Options:",
+                selectInput(inputId = "boxvar", label = "Select measurement type:",
+                            choices = c("Lengths (mm)" = "m", "Weights (g)" = "w", "Age by Gender" = "a")),
+                checkboxInput(inputId = "boxdots", label = "Plot data points?", value = FALSE)
+              )
+            ),
+            
+            # correlation plot options ----
+            conditionalPanel(
+              condition = "input.viztype == 'corr'",
+              box(width = 12, title = "Plot Options:",
+                  radioButtons(inputId = "corrmethod", label = "Select correlation method:",
+                               choices = c("Pearson" = "pearson", "Spearman" = "spearman", "Kendall" = "kendall"),
+                               selected = "pearson")
+              )
+            )
+          ), # ----
+          
+          # plots ----
+          column(width = 9,
+                 
+            # boxplot ----
+            conditionalPanel(
+              condition = "input.viztype == 'box'",
+              box(width = 12,
+                plotOutput(outputId = "boxplot", height = "700px")
+              )
+            ), # ----
+            
+            # violin plot ----
+            conditionalPanel(
+              condition = "input.viztype == 'violin'",
+              box(width = 12,
+                  plotOutput(outputId = "violinplot", height = "700px")
+              )
+            ), # ----
+            
+            # frequency plots
+            conditionalPanel(
+              condition = "input.viztype == 'dist'",
+              box(width = 12,
+                plotOutput(outputId = "distplot", height = "600px")
+              )
+            ),
+            
+            # correlation plot
+            conditionalPanel(
+              condition = "input.viztype == 'corr'",
+              box(width = 10,
+                  plotOutput(outputId = "corrplot", height = "600px")
+              )
+            )
+          ) # ----
+        )
+      ), # ----
+      
+      # data table ----
+      tabItem(tabName = "datatable",
+        DT::dataTableOutput(outputId = 'mydata')
+      ), # ----
+      
+      # about page ----
+      tabItem(tabName = "about",
+        h1("HELLO WORLD"),
+        p("lorem ipsum")
+      ), # ----
+      
+      # interactive visualization tab ----
       tabItem(tabName = "visualizations",
         fluidRow(
           column(width = 3,
@@ -82,24 +190,188 @@ ui <- dashboardPage(skin = "green",
             )
           )
         )
-      ),
-      
-      tabItem(tabName = "datatable",
-        fluidRow(
-          dataTableOutput("data")
-        )
-      )
+      ) # ----
       
     )
   )
 )
 
 
-# define server function ----
+# define server function 
 server <- function(input, output, session) {
   
-  output$data <- renderTable({ data })
+  # data exploration 
+  # box plots ----
+  output$boxplot <- renderPlot({
+    if (input$boxvar == "m"){
+      p <- data %>% 
+        pivot_longer(cols = 2:4, names_to = "measurement.type", values_to = "measurement.value") %>% 
+        ggplot(aes(x = measurement.type, y = measurement.value, color = measurement.type)) +
+        geom_boxplot(size = 1) +
+        scale_x_discrete(labels = names(var.names)[2:4]) +
+        labs(y = "Measurement (mm)") + 
+        theme(axis.text.x = element_text(size = 20),
+              axis.text.y = element_text(size = 15),
+              axis.title.x = element_blank(), 
+              axis.title.y = element_text(size = 20),
+              panel.border = element_rect(fill = NA, color = "black"),
+              legend.position = 'none')
+      if (input$boxdots == TRUE){
+        p <- p + geom_point(shape = 19, alpha = 0.1, position = position_jitter(width = 0.1))
+      }
+    } else if (input$boxvar == "w"){
+      p <- data %>% 
+        pivot_longer(cols = 5:8, names_to = "measurement.type", values_to = "measurement.value") %>% 
+        ggplot(aes(x = measurement.type, y = measurement.value, color = measurement.type)) +
+        geom_boxplot(size = 1) +
+        scale_x_discrete(labels = names(var.names)[5:8]) +
+        labs(y = "Weight (g)") + 
+        theme(axis.text.x = element_text(size = 20),
+              axis.text.y = element_text(size = 15),
+              axis.title.x = element_blank(), 
+              axis.title.y = element_text(size = 20),
+              panel.border = element_rect(fill = NA, color = "black"),
+              legend.position = 'none')
+      if (input$boxdots == TRUE){
+        p <- p + geom_point(shape = 19, alpha = 0.1, position = position_jitter(width = 0.1))
+      }
+    } else {
+      p <- data %>%
+        ggplot(aes(x = sex, y = age, color = sex)) +
+        geom_boxplot(size = 1) +
+        scale_x_discrete(labels = c("Male", "Female", "Infant")) +
+        labs(y = "Age (years)") + 
+        theme(axis.text.x = element_text(size = 20),
+              axis.text.y = element_text(size = 15),
+              axis.title.x = element_blank(), 
+              axis.title.y = element_text(size = 20),
+              panel.border = element_rect(fill = NA, color = "black"),
+              legend.position = 'none')
+      if (input$boxdots == TRUE){
+        p <- p + geom_point(shape = 19, alpha = 0.1, position = position_jitter(width = 0.1))
+      }
+    }
+    p
+  }) # ----
   
+  # histogram/area plots ----
+  output$distplot <- renderPlot({
+    if (input$distvar == "m"){
+      p <- data %>% 
+        pivot_longer(cols = 2:4, names_to = "measurement.type", values_to = "measurement.value") %>% 
+        mutate(measurement.type = factor(measurement.type, levels = var.names[2:4])) %>% 
+        ggplot(aes(x = measurement.value, fill = measurement.type, color = measurement.type)) +
+        labs(x = "Measurement (mm)", y = "Frequency", fill = "Measurement\nType") + 
+        scale_fill_discrete(labels = names(var.names)[2:4]) +
+        guides(color = "none") +
+        theme(axis.text = element_text(size = 15),
+              axis.title = element_text(size = 20),
+              legend.title = element_text(size = 15),
+              legend.text = element_text(size = 12),
+              panel.border = element_rect(fill = NA, color = "black"))
+      if (input$disttype == 'hist'){
+        p <- p + geom_histogram(alpha = 1/2, binwidth = 2, position = "identity")
+      } else {
+        p <- p + geom_area(stat = "bin", alpha = 1/2, binwidth = 2, position = "identity")
+      }
+      
+    } else if (input$distvar == "w"){
+      p <- data %>% 
+        pivot_longer(cols = 5:8, names_to = "measurement.type", values_to = "measurement.value") %>% 
+        mutate(measurement.type = factor(measurement.type, levels = var.names[5:8])) %>% 
+        ggplot(aes(x = measurement.value, fill = measurement.type, color = measurement.type)) +
+        labs(x = "Weight (g)", y = "Frequency", fill = "Weight Type") + 
+        scale_fill_discrete(labels = names(var.names)[5:8]) +
+        guides(color = "none") +
+        theme(axis.text = element_text(size = 15),
+              axis.title = element_text(size = 20),
+              legend.title = element_text(size = 15),
+              legend.text = element_text(size = 12),
+              panel.border = element_rect(fill = NA, color = "black"))
+      if (input$disttype == 'hist'){
+        p <- p + geom_histogram(alpha = 1/3, binwidth = 5, position = "identity")
+      } else {
+        p <- p + geom_area(stat = "bin", alpha = 1/3, binwidth = 5, position = "identity")
+      }
+      
+    } else {
+      p <- data %>% 
+        ggplot(aes(x = age, fill = sex, color = sex)) +
+        labs(x = "Age (years)", y = "Frequency", fill = "Gender") + 
+        scale_fill_discrete(labels = names(var.names)[2:4]) +
+        guides(color = "none") +
+        theme(axis.text = element_text(size = 15),
+            axis.title = element_text(size = 20),
+            legend.title = element_text(size = 15),
+            legend.text = element_text(size = 12),
+            panel.border = element_rect(fill = NA, color = "black"))
+      if (input$disttype == 'hist'){
+        p <- p + geom_histogram(alpha = 1/2, binwidth = 1, position = "identity")
+      } else {
+        p <- p + geom_area(stat = "bin", alpha = 1/2, binwidth = 1, position = "identity")
+      }
+    }
+    p
+  }) # ----
+  
+  # violin plots ----
+  output$violinplot <- renderPlot({
+    if (input$viovar == "m"){
+      p <- data %>% 
+        pivot_longer(cols = 2:4, names_to = "measurement.type", values_to = "measurement.value") %>% 
+        ggplot(aes(x = measurement.type, y = measurement.value, fill = measurement.type)) +
+        geom_violin(size = 1, draw_quantiles = TRUE) +
+        scale_x_discrete(labels = names(var.names)[2:4]) +
+        labs(y = "Measurement (mm)") + 
+        theme(axis.text.x = element_text(size = 20),
+              axis.text.y = element_text(size = 15),
+              axis.title.x = element_blank(), 
+              axis.title.y = element_text(size = 20),
+              panel.border = element_rect(fill = NA, color = "black"),
+              legend.position = 'none')
+    } else if (input$viovar == "w"){
+      p <- data %>% 
+        pivot_longer(cols = 5:8, names_to = "measurement.type", values_to = "measurement.value") %>% 
+        ggplot(aes(x = measurement.type, y = measurement.value, fill = measurement.type)) +
+        geom_violin(size = 1, draw_quantiles = TRUE) +
+        scale_x_discrete(labels = names(var.names)[5:8]) +
+        labs(y = "Weight (g)") + 
+        theme(axis.text.x = element_text(size = 20),
+              axis.text.y = element_text(size = 15),
+              axis.title.x = element_blank(), 
+              axis.title.y = element_text(size = 20),
+              panel.border = element_rect(fill = NA, color = "black"),
+              legend.position = 'none')
+    } else {
+      p <- data %>%
+        ggplot(aes(x = sex, y = age, fill = sex)) +
+        geom_violin(size = 1, draw_quantiles = TRUE) +
+        scale_x_discrete(labels = c("Male", "Female", "Infant")) +
+        labs(y = "Age (years)") + 
+        theme(axis.text.x = element_text(size = 20),
+              axis.text.y = element_text(size = 15),
+              axis.title.x = element_blank(), 
+              axis.title.y = element_text(size = 20),
+              panel.border = element_rect(fill = NA, color = "black"),
+              legend.position = 'none')
+    }
+    p
+  }) # ----
+  
+  # correlation plot
+  output$corrplot <- renderPlot({
+    data %>% 
+      select(-sex) %>%
+      cor(method = input$corrmethod) %>% 
+      corrplot(method = "color", col.lim = c(0,1), number.cex = 1.5,
+               tl.cex = 1.5, addCoef.col = "red", tl.col = 1, cl.cex = 1.5)
+  })
+  
+  # data table ----
+  output$mydata <- DT::renderDataTable({ data })
+  # ----
+  
+  # interactive visualization ----
   output$plot1 <- renderPlotly({
     xvar <- input$xvar
     yvar <- input$yvar
@@ -179,7 +451,7 @@ server <- function(input, output, session) {
             axis.title = element_text(size = 15),
             panel.border = element_rect(fill = NA, color = "black"))
     ggplotly(p1, tooltip = "text")
-  })
+  }) # ----
 }
 
 #### Run the application ####
