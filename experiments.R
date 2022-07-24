@@ -31,8 +31,12 @@ data <- data %>%
   mutate(sex = factor(sex, levels = c("male", "female", "infant")),
          across(.cols = colnames(.)[2:8], ~ .x*200),
          age = rings + 1) %>% 
+  filter(height < 60) %>% 
   select(-rings)
 
+# Statistical tests
+m <- glm(age ~ sex + height + whole.weight, data = data)
+predict.lm(m, newdata = data.frame("sex" = 'male', "height" = 2, "whole.weight" = 14))
 
 ##########################
 ### EXPLORE/CLEAN DATA ###

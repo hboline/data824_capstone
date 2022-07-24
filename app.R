@@ -5,6 +5,7 @@
 
 # load libraries ----
 library(shiny)
+library(shinyWidgets)
 library(tidyverse)
 library(plotly)
 library(shinydashboard)
@@ -39,6 +40,7 @@ ui <- dashboardPage(skin = "green",
   # sidebar
   dashboardSidebar(
     sidebarMenu(
+      menuItem("Data Statistics", tabName = "datastat", icon = icon("filter", lib = "glyphicon")),
       menuItem("Data Exploration", tabName = "dataexploration", icon = icon("search", lib = "glyphicon")),
       menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon")),
       menuItem("Interactive Visualization", tabName = "visualizations", icon = icon("hand-up", lib = "glyphicon")),
@@ -55,32 +57,75 @@ ui <- dashboardPage(skin = "green",
     
     tabItems(
       
+      # data statistics
+      tabItem(tabName = "datastat",
+        h1("Data Statistics"),
+        h4("Statistical Summaries and Tests"),
+        br(),
+        fluidRow(
+          # summary options
+          column(width = 7,
+            box(width = 12, height = 360, title = "General Summary",
+                DT::DTOutput(outputId = "dataSummary")
+            )
+          ),
+          column(width = 5,
+            box(width = 12, height = 360,
+                radioGroupButtons("statbarchoice", label = "Select Statistic to Visualize:",
+                             choices = c("Mean" = 'mean', "Variance" = 'var', "Std. Dev." = 'sd',
+                                         "Min" = 'min', "Median" = 'median', "Max" = 'max')),
+                plotOutput(outputId = "stddevplot", height = 260)
+            )
+          )
+        ),
+        
+        fluidRow(
+          column(width = 4,
+            box(width = 12, title = "Statistical Test",
+              selectInput("stattestchoice", "Choose statistical test:",
+                          choices = c(A = "a", B = "b")),
+              div(style = "disply:inline-block", actionButton("test", "Perform Test"), dtyle = "float:right")
+            )
+          ),
+          column(width = 4,
+            box(width = 12, title = "Test Results",
+              plotOutput("testplot")
+            )
+          ),
+          column(width = 4,
+                 box(width = 12
+                     
+                 )
+          )
+        )
+        
+      ),
+      
       # data exploration ----
       tabItem(tabName = "dataexploration",
         fluidPage(
           h1("Data Exploration & Visualization"),
           h4("Box, Violin, Frequency, and Correlation Plots"),
           br(),
-          # selection and options ----
+          # selection and options
           column(width = 3,
-            # main selection ----
+            # main selection
             box(width = 12, title = "Select Visualization:",
               selectInput(inputId = "viztype", label = NULL, 
                           choices = c("Box Plots" = "box", "Frequency Plots" = "dist", 
-                                      "Violin Plots" = "violin", "Correlation Plot" = "corr"),
-                          selected = "corr")
-            ), # ----
+                                      "Violin Plots" = "violin", "Correlation Plot" = "corr"))
+            ),
             
-            # histogram/area plot options ----
+            # histogram/area plot options
             conditionalPanel(
               condition = "input.viztype == 'dist'",
               box(width = 12, title = "Plot Options:",
                 selectInput(inputId = "distvar", label = "Select measurement type:",
                             choices = c("Lengths (mm)" = "m", "Weights (g)" = "w", "Age by Gender" = "a")),
-                radioButtons(inputId = "disttype", label = "Selection distribution type:",
-                             choices = c("Histogram" = "hist", "Area Plot" = "area"))
+                radioGroupButtons(inputId = "disttype", label = "Selection distribution type:",
+                                  choices = c("Histogram" = "hist", "Area Plot" = "area"))
               )
-            ), # ----
+            ),
             
             # violin plot options 
             conditionalPanel(
@@ -91,7 +136,7 @@ ui <- dashboardPage(skin = "green",
               )
             ),
             
-            # box plot options ----
+            # box plot options
             conditionalPanel(
               condition = "input.viztype == 'box'",
               box(width = 12, title = "Plot Options:",
@@ -101,35 +146,35 @@ ui <- dashboardPage(skin = "green",
               )
             ),
             
-            # correlation plot options ----
+            # correlation plot options
             conditionalPanel(
               condition = "input.viztype == 'corr'",
               box(width = 12, title = "Plot Options:",
-                  radioButtons(inputId = "corrmethod", label = "Select correlation method:",
-                               choices = c("Pearson" = "pearson", "Spearman" = "spearman", "Kendall" = "kendall"),
-                               selected = "pearson")
+                  radioGroupButtons(inputId = "corrmethod", label = "Select correlation method:",
+                                    choices = c("Pearson" = "pearson", "Spearman" = "spearman", "Kendall" = "kendall"),
+                                    selected = "pearson")
               )
             )
-          ), # ----
+          ), 
           
-          # plots ----
+          # plots
           column(width = 9,
                  
-            # boxplot ----
+            # boxplot
             conditionalPanel(
               condition = "input.viztype == 'box'",
               box(width = 12,
                 plotOutput(outputId = "boxplot", height = "700px")
               )
-            ), # ----
+            ), #
             
-            # violin plot ----
+            # violin plot
             conditionalPanel(
               condition = "input.viztype == 'violin'",
               box(width = 12,
                   plotOutput(outputId = "violinplot", height = "700px")
               )
-            ), # ----
+            ), #
             
             # frequency plots
             conditionalPanel(
@@ -146,7 +191,7 @@ ui <- dashboardPage(skin = "green",
                   plotOutput(outputId = "corrplot", height = "600px")
               )
             )
-          ) # ----
+          )
         )
       ), # ----
       
@@ -166,27 +211,30 @@ ui <- dashboardPage(skin = "green",
         fluidRow(
           column(width = 3,
                  
-            box(width = 10, title = "Variable Options",
+            box(width = 12, title = "Variable Options",
               selectInput(inputId = "xvar", label = "Select x-variable:", 
                           choices = append(var.names[9], var.names[2:8]), selected = "height"),
               selectInput(inputId = "yvar", label = "Select y-variable:", 
                           choices = append(var.names[9], var.names[2:8]), selected = "age"),
-              checkboxGroupInput(inputId = "sexes", label = "Select genders:", 
-                                 choiceNames = c("Male", "Female", "Infant"),
-                                 choiceValues = c("male", "female", "infant"),
-                                 selected = c("male", "female", "infant"))
+              checkboxGroupButtons(inputId = "sexes", label = "Select genders:", 
+                                   choiceNames = c("Male", "Female", "Infant"),
+                                   choiceValues = c("male", "female", "infant"),
+                                   selected = c("male", "female", "infant"),
+                                   checkIcon = list(yes = icon("ok", lib = "glyphicon")))
             ),
-            box(width = 10, title = "Plot Options",
+            box(width = 12, title = "Plot Options",
               sliderInput(inputId = "alpha", label = "Point opacity:",
                           min = 0.0, max = 1.0, step = 0.1, value = 1.0),
+              sliderInput(inputId = "ptsize", label = "Point size:",
+                          min = 0.1, max = 2.0, step = 0.1, value = 2.0),
               checkboxInput(inputId = "jitchk", label = "Jitter points?", value = TRUE),
               checkboxInput(inputId = "matchfill", label = "Match fill color?", value = FALSE)
             )
           ),
           
-          column(width = 7,
+          column(width = 9,
             box(width = 40,
-              plotlyOutput("plot1", height = "600px")
+              plotlyOutput("plot1", height = "700px")
             )
           )
         )
@@ -199,6 +247,47 @@ ui <- dashboardPage(skin = "green",
 
 # define server function 
 server <- function(input, output, session) {
+  
+  # data stats and summary ----
+  output$dataSummary <- DT::renderDataTable({
+    df <- round(as.data.frame(rbind(
+      "Mean" = sapply(data[,-1], mean),
+      "Variance" = sapply(data[,-1], var),
+      "Std. Dev." = sapply(data[,-1], sd),
+      "Min" = sapply(data[,-1], min),
+      "Median" = sapply(data[,-1], median),
+      "Max" = sapply(data[,-1], max)
+    )), 2)
+    colnames(df) <- names(var.names)[2:9]
+    #data.frame("Statistic" = row.names(df), df)
+    DT::datatable(df, options = list(dom = 't', scrollX = TRUE))
+  }) 
+  
+  output$stddevplot <- renderPlot({
+    df <- as.data.frame(sapply(data[,-1], input$statbarchoice))
+    colnames(df) <- "value"
+    row.names(df) <- names(var.names)[2:9]
+    df %>%
+      ggplot(aes(x = value, y = reorder(row.names(.), value))) +
+      geom_col(fill = "lightseagreen") +
+      scale_x_continuous(expand = c(0,0)) +
+      theme(axis.title = element_blank(),
+            axis.text.y = element_text(size = 12, face = "bold"),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            axis.ticks = element_blank(),
+            plot.margin = margin(r = 10))
+  }) # ----
+  
+  # statistical tests
+  react <- eventReactive(input$test,{
+    data.frame(cbind(runif(50), rnorm(50)))
+  })
+  
+  output$testplot <- renderPlot({
+    react() %>% ggplot(aes(.[,1], .[,2])) + geom_point()
+  })
   
   # data exploration 
   # box plots ----
@@ -358,14 +447,14 @@ server <- function(input, output, session) {
     p
   }) # ----
   
-  # correlation plot
+  # correlation plot ----
   output$corrplot <- renderPlot({
     data %>% 
       select(-sex) %>%
       cor(method = input$corrmethod) %>% 
       corrplot(method = "color", col.lim = c(0,1), number.cex = 1.5,
                tl.cex = 1.5, addCoef.col = "red", tl.col = 1, cl.cex = 1.5)
-  })
+  }) # ----
   
   # data table ----
   output$mydata <- DT::renderDataTable({ data })
@@ -423,7 +512,7 @@ server <- function(input, output, session) {
                      "\n", yvar_name, ": ", .[,ind3], " ", unity,
                      "\nSex:", sex
                    ))) +
-        geom_point(shape = shape, size = 2, alpha = input$alpha, fill = "white", 
+        geom_point(shape = shape, size = input$ptsize, alpha = input$alpha, fill = "white", 
                    position = position_jitter(width = input$jitchk, seed = 1))
     } else {
       p1 <- data.in %>% 
@@ -432,7 +521,7 @@ server <- function(input, output, session) {
                      xvar_name, ": ", .[,ind2], " ", unitx,
                      "\n", yvar_name, ": ", .[,ind3], " ", unity
                    ))) +
-        geom_point(shape = shape, size = 2, alpha = input$alpha, fill = "white", color = "gray40", 
+        geom_point(shape = shape, size = input$ptsize, alpha = input$alpha, fill = "white", color = "gray40", 
                    position = position_jitter(width = input$jitchk, seed = 1))
       genchk <- ""
     }
