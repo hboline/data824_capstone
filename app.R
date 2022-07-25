@@ -40,11 +40,12 @@ ui <- dashboardPage(skin = "green",
   # sidebar
   dashboardSidebar(
     sidebarMenu(
+      menuItem("Prediction Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
       menuItem("Data Statistics", tabName = "datastat", icon = icon("filter", lib = "glyphicon")),
       menuItem("Data Exploration", tabName = "dataexploration", icon = icon("search", lib = "glyphicon")),
-      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon")),
       menuItem("Interactive Visualization", tabName = "visualizations", icon = icon("hand-up", lib = "glyphicon")),
-      menuItem("Data", tabName = "datatable", icon = icon("table"))
+      menuItem("Data", tabName = "datatable", icon = icon("table")),
+      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon"))
     )
   ),
   
@@ -80,22 +81,47 @@ ui <- dashboardPage(skin = "green",
         ),
         
         fluidRow(
-          column(width = 4,
-            box(width = 12, title = "Statistical Test",
+          column(width = 3,
+            box(width = 12, title = "Statistical Test", height = 360,
               selectInput("stattestchoice", "Choose statistical test:",
-                          choices = c(A = "a", B = "b")),
-              div(style = "disply:inline-block", actionButton("test", "Perform Test"), dtyle = "float:right")
-            )
+                          choices = c("Gender Measures (2-sample t-test)" = "st1",
+                                      "Linear Regression" = "st2")),
+              conditionalPanel(
+                condition = "input.stattestchoice == 'st1'",
+                radioButtons("st1c", label = "Choose gender pair:", inline = TRUE,
+                             choices = c("Male-Female" = "mf", "Male-Infant" = "mi", "Female-Infant" = "fi")),
+                selectInput("stattestvar", label = "Choose variable to test:",
+                            choices = var.names[2:9])
+              ),
+              conditionalPanel(
+                condition = "input.stattestchoice == 'st2'",
+                selectInput("st2ind", label = "Choose independent variables:",
+                            choices = var.names, multiple = TRUE),
+                uiOutput("st2depUI")
+              ),
+              actionButton("stattestgo", "Perform Test")
+            ),
           ),
           column(width = 4,
-            box(width = 12, title = "Test Results",
-              plotOutput("testplot")
+            box(width = 12, title = "Test Results", height = 360,
+              conditionalPanel(
+                condition = "input.stattestchoice == 'st1'",
+                DT::DTOutput(outputId = "st1")
+              ),
+              conditionalPanel(
+                condition = "input.stattestchoice == 'st2'",
+                DT::DTOutput(outputId = "st2")
+              )
             )
           ),
-          column(width = 4,
-                 box(width = 12
-                     
-                 )
+          column(width = 5,
+            conditionalPanel(
+              condition = "input.stattestchoice == 'st2'",
+              box(width = 12, height = 360, title = "Linear Model Residual Distribution",
+                condition = "input.stattestchoice == 'st2'",
+                plotOutput(outputId = "st2plot", height = 300)
+              )
+            )
           )
         )
         
@@ -280,14 +306,77 @@ server <- function(input, output, session) {
             plot.margin = margin(r = 10))
   }) # ----
   
-  # statistical tests
-  react <- eventReactive(input$test,{
-    data.frame(cbind(runif(50), rnorm(50)))
+  # statistical tests ----
+  output$st2depUI <- renderUI({
+    selectInput("st2dep", label = "Choose dependent variable:",
+                choices = var.names[which(!var.names %in% c(input$st2ind, "sex"))])
   })
   
-  output$testplot <- renderPlot({
-    react() %>% ggplot(aes(.[,1], .[,2])) + geom_point()
+  stdata <- eventReactive(input$stattestgo,{
+    if (input$stattestchoice == "st1"){
+      data %>% select(sex, eval(input$stattestvar))
+    } else {
+      data
+    }
   })
+  
+  output$st1 <- DT::renderDataTable({
+    if (input$st1c == "mf"){
+      x <- stdata() %>% filter(sex == "male") %>% select(2) %>% pull()
+      y <- stdata() %>% filter(sex == "female") %>% select(2) %>% pull()
+      s1 <- "Male"
+      s2 <- "Female"
+    } else if (input$st1c == "mi"){
+      x <- stdata() %>% filter(sex == "male") %>% select(2) %>% pull()
+      y <- stdata() %>% filter(sex == "infant") %>% select(2) %>% pull()
+      s1 <- "Male"
+      s2 <- "Infant"
+    } else {
+      x <- stdata() %>% filter(sex == "female") %>% select(2) %>% pull()
+      y <- stdata() %>% filter(sex == "infant") %>% select(2) %>% pull()
+      s1 <- "Female"
+      s2 <- "Infant"
+    }
+    df <- t.test(x,y) %>% tidy %>% as.data.frame
+    df <- cbind(c( "t-Value", "p-Value", paste0("Mean 1 (",s1,")"), paste0("Mean 2 (",s2,")"), 
+                   "Mean Diff.", "Mean Diff. 5%", "Mean Diff. 95%"),
+                as.vector(df[,c(4,5,2,3,1,7,8)])) %>% as.data.frame()
+    colnames(df) <- c("Statistic", "Value")
+    DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
+  })
+  
+  output$st2 <- DT::renderDataTable({
+    m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
+    df <- as.data.frame(tidy(m)) %>% mutate(across(.cols = 2:5, signif, 4)) %>% select(1,2,4,5)
+    colnames(df) <- c("Model Term", "Estimate", "t-Value", "p-Value")
+    rn <- c("Intercept")
+    for (i in 2:nrow(df)){
+      if (df[i,1] == "sexfemale"){
+        rn <- c(rn, "Female")
+      } else if (df[i,1] == "sexinfant"){
+        rn <- c(rn, "Infant")
+      } else {
+        rn <- c(rn, names(var.names[var.names == df[i,1]]))
+      }
+    }
+    df[,1] <- rn
+    DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
+  })
+  
+  output$st2plot <- renderPlot({
+    m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
+    m %>% augment %>% 
+      ggplot(aes(`.std.resid`)) +
+      xlab("Standard Residual") +
+      geom_histogram(binwidth = 0.1, fill = "coral") +
+      scale_x_continuous(expand = c(0,0)) +
+      scale_y_continuous(expand = c(0,0)) +
+      theme(axis.title.y = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            panel.border = element_rect(fill = NA, color = "black"))
+  }) # ----
   
   # data exploration 
   # box plots ----
