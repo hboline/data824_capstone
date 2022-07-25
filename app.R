@@ -40,7 +40,7 @@ ui <- dashboardPage(skin = "green",
   # sidebar
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Prediction Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
+      menuItem("Data Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
       menuItem("Data Statistics", tabName = "datastat", icon = icon("filter", lib = "glyphicon")),
       menuItem("Data Exploration", tabName = "dataexploration", icon = icon("search", lib = "glyphicon")),
       menuItem("Interactive Visualization", tabName = "visualizations", icon = icon("hand-up", lib = "glyphicon")),
@@ -58,7 +58,67 @@ ui <- dashboardPage(skin = "green",
     
     tabItems(
       
-      # data statistics
+      # prediction models
+      tabItem(tabName = "models",
+        h1("Data Models"),
+        h4("Linear Regression & Principal Components Analysis"),
+        br(),
+        fluidRow(
+          column(width = 3,
+            box(width = 12, height = 180, title = "Model Selection",
+              selectInput("modelchoice", label = "Select model type:",
+                          choices = c("Linear Regression" = "linreg", "PCA" = "pca"),
+                          selected = "pca"),
+              actionButton("modelgo", label = "Run Model")
+            ),
+            box(width = 12, height = 500, title = "Options",
+              conditionalPanel(
+                condition = "input.modelchoice == 'linreg'",
+                selectInput("LRvars", label = "Choose independent variables:",
+                            choices = var.names[-9], multiple = TRUE)
+              ),
+              conditionalPanel(
+                condition = "input.modelchoice == 'pca'",
+                selectInput("pcaplots", label = "Choose plot:", 
+                            choices = c("PCA Scatterplot" = "opt1", "Information Table" = "opt2"),
+                            selected = "opt2"),
+                conditionalPanel(
+                  condition = "input.pcaplots == 'opt1'",
+                  h4("Select PCA Components:"),
+                  uiOutput("PCAopt1"),
+                  uiOutput("PCAopt2"),
+                  uiOutput("PCAopt3"),
+                  checkboxInput("incinf", "Include infants?", value = TRUE)
+                ),
+                conditionalPanel(
+                  condition = "input.pcaplots == 'opt2'",
+                  selectInput("PCAtableopt", label = "Select Table:",
+                              choices = c("Eigenvalues" = "opt1", "Eigenspace Data Coordinates" = "opt2",
+                                          "Variable Correlation w/ PCA Axes" = "opt3"))
+                )
+              )
+            )
+          ),
+          conditionalPanel(
+            condition = "input.modelchoice == 'pca'",
+            column(width = 9,
+              conditionalPanel(
+                condition = "input.pcaplots == 'opt1'",
+                box(width = 12, height = 700,
+                  plotOutput(outputId = "PCA1", height = 650)
+                )
+              ),               
+              conditionalPanel(
+                condition = "input.pcaplots == 'opt2'",
+                DT::dataTableOutput(outputId = "PCAtable")
+              )
+            )
+          )
+          
+        )
+      ),
+      
+      # data statistics ----
       tabItem(tabName = "datastat",
         h1("Data Statistics"),
         h4("Statistical Summaries and Tests"),
@@ -100,7 +160,7 @@ ui <- dashboardPage(skin = "green",
                 uiOutput("st2depUI")
               ),
               actionButton("stattestgo", "Perform Test")
-            ),
+            )
           ),
           column(width = 4,
             box(width = 12, title = "Test Results", height = 360,
@@ -125,7 +185,7 @@ ui <- dashboardPage(skin = "green",
           )
         )
         
-      ),
+      ), # ----
       
       # data exploration ----
       tabItem(tabName = "dataexploration",
@@ -223,6 +283,8 @@ ui <- dashboardPage(skin = "green",
       
       # data table ----
       tabItem(tabName = "datatable",
+        h1("Abalone Data"),
+        br(),
         DT::dataTableOutput(outputId = 'mydata')
       ), # ----
       
@@ -234,6 +296,8 @@ ui <- dashboardPage(skin = "green",
       
       # interactive visualization tab ----
       tabItem(tabName = "visualizations",
+        h1("Interactive Visualization"),
+        br(),
         fluidRow(
           column(width = 3,
                  
@@ -273,6 +337,63 @@ ui <- dashboardPage(skin = "green",
 
 # define server function 
 server <- function(input, output, session) {
+  
+  # prediction models
+  output$model_data <- eventReactive(input$modelgo, {
+    
+  })
+  
+  output$LR1 <- renderPlot({
+    m <- lm(paste0("age ~ ", paste(input$LRvars, collapse = " + ")), data = model_data())
+  })
+  
+  # PCA ----
+  output$PCAopt1 <- renderUI({
+    r <- if (input$incage){1:8} else {1:7}
+    selectInput("PCAcomp1", "Component 1:", choices = r, selected = 1)
+  })
+  output$PCAopt2 <- renderUI({
+    r <- if (input$incage){1:8} else {1:7}
+    selectInput("PCAcomp2", "Component 2:", choices = r, selected = 2)
+  })
+  output$PCAopt3 <- renderUI({
+    checkboxInput("incage", "Include age?", value = TRUE
+  )})
+  
+  output$PCA1 <- renderPlot({
+    axes <- as.integer(c(input$PCAcomp1,input$PCAcomp2))
+    if (input$incinf == FALSE){
+      df <- data %>% filter(!sex == "infant")
+    } else {
+      df <- data
+    }
+    if (input$incage == FALSE){
+      m <- PCA(df[,c(-1,-9)], ncp = 8, graph = FALSE)
+    } else {
+      m <- PCA(df[-1], ncp = 8, graph = FALSE)
+    }
+    fviz_pca(m, axes = axes, repel = TRUE, col.ind = df$age, col.var = "black", label = "var") +
+      scale_color_gradientn(colors = rainbow(length(levels(as.factor(df$age))))) +
+      labs(color = "Age") +
+      theme(plot.title = element_blank(),
+            axis.title = element_text(size = 15),
+            axis.text = element_text(size = 12),
+            legend.title = element_text(size = 14))
+  })
+  
+  output$PCAtable <- DT::renderDataTable({
+    m <- PCA(data[-1], ncp = 8, graph = FALSE)
+    if (input$PCAtableopt == "opt1"){
+      df <- m$eig
+    } else if (input$PCAtableopt == "opt2"){
+      df <- m$ind$coord
+    } else if (input$PCAtableopt == "opt3"){
+      df <- m$var$cor
+    }
+    df <- as.data.frame(df) %>% 
+      mutate(across(which(sapply(., is.numeric)), signif, 3))
+    DT::datatable(df, options = list(scrollX = TRUE))
+  })
   
   # data stats and summary ----
   output$dataSummary <- DT::renderDataTable({
@@ -320,62 +441,66 @@ server <- function(input, output, session) {
     }
   })
   
-  output$st1 <- DT::renderDataTable({
-    if (input$st1c == "mf"){
-      x <- stdata() %>% filter(sex == "male") %>% select(2) %>% pull()
-      y <- stdata() %>% filter(sex == "female") %>% select(2) %>% pull()
-      s1 <- "Male"
-      s2 <- "Female"
-    } else if (input$st1c == "mi"){
-      x <- stdata() %>% filter(sex == "male") %>% select(2) %>% pull()
-      y <- stdata() %>% filter(sex == "infant") %>% select(2) %>% pull()
-      s1 <- "Male"
-      s2 <- "Infant"
-    } else {
-      x <- stdata() %>% filter(sex == "female") %>% select(2) %>% pull()
-      y <- stdata() %>% filter(sex == "infant") %>% select(2) %>% pull()
-      s1 <- "Female"
-      s2 <- "Infant"
-    }
-    df <- t.test(x,y) %>% tidy %>% as.data.frame
-    df <- cbind(c( "t-Value", "p-Value", paste0("Mean 1 (",s1,")"), paste0("Mean 2 (",s2,")"), 
-                   "Mean Diff.", "Mean Diff. 5%", "Mean Diff. 95%"),
-                as.vector(df[,c(4,5,2,3,1,7,8)])) %>% as.data.frame()
-    colnames(df) <- c("Statistic", "Value")
-    DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
-  })
-  
-  output$st2 <- DT::renderDataTable({
-    m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
-    df <- as.data.frame(tidy(m)) %>% mutate(across(.cols = 2:5, signif, 4)) %>% select(1,2,4,5)
-    colnames(df) <- c("Model Term", "Estimate", "t-Value", "p-Value")
-    rn <- c("Intercept")
-    for (i in 2:nrow(df)){
-      if (df[i,1] == "sexfemale"){
-        rn <- c(rn, "Female")
-      } else if (df[i,1] == "sexinfant"){
-        rn <- c(rn, "Infant")
+  observeEvent(input$stattestgo, {
+    output$st1 <- DT::renderDataTable(isolate({
+      if (input$st1c == "mf"){
+        x <- stdata() %>% filter(sex == "male") %>% select(2) %>% pull()
+        y <- stdata() %>% filter(sex == "female") %>% select(2) %>% pull()
+        s1 <- "Male"
+        s2 <- "Female"
+      } else if (input$st1c == "mi"){
+        x <- stdata() %>% filter(sex == "male") %>% select(2) %>% pull()
+        y <- stdata() %>% filter(sex == "infant") %>% select(2) %>% pull()
+        s1 <- "Male"
+        s2 <- "Infant"
       } else {
-        rn <- c(rn, names(var.names[var.names == df[i,1]]))
+        x <- stdata() %>% filter(sex == "female") %>% select(2) %>% pull()
+        y <- stdata() %>% filter(sex == "infant") %>% select(2) %>% pull()
+        s1 <- "Female"
+        s2 <- "Infant"
       }
-    }
-    df[,1] <- rn
-    DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
-  })
-  
-  output$st2plot <- renderPlot({
-    m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
-    m %>% augment %>% 
-      ggplot(aes(`.std.resid`)) +
-      xlab("Standard Residual") +
-      geom_histogram(binwidth = 0.1, fill = "coral") +
-      scale_x_continuous(expand = c(0,0)) +
-      scale_y_continuous(expand = c(0,0)) +
-      theme(axis.title.y = element_blank(),
-            panel.grid.major = element_blank(),
-            panel.grid.minor = element_blank(),
-            panel.background = element_blank(),
-            panel.border = element_rect(fill = NA, color = "black"))
+      df <- t.test(x,y) %>% tidy %>% as.data.frame
+      df <- cbind(c( "t-Value", "p-Value", paste0("Mean 1 (",s1,")"), paste0("Mean 2 (",s2,")"), 
+                     "Mean Diff.", "Mean Diff. 5%", "Mean Diff. 95%"),
+                  as.vector(df[,c(4,5,2,3,1,7,8)])) %>% as.data.frame()
+      colnames(df) <- c("Statistic", "Value")
+      df <- df %>% mutate(Value = as.numeric(Value),
+                          across(.cols = 2, signif, 4))
+      DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
+    }))
+    
+    output$st2 <- DT::renderDataTable(isolate({
+      m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
+      df <- as.data.frame(tidy(m)) %>% mutate(across(.cols = 2:5, signif, 4)) %>% select(1,2,4,5)
+      colnames(df) <- c("Model Term", "Estimate", "t-Value", "p-Value")
+      rn <- c("Intercept")
+      for (i in 2:nrow(df)){
+        if (df[i,1] == "sexfemale"){
+          rn <- c(rn, "Female")
+        } else if (df[i,1] == "sexinfant"){
+          rn <- c(rn, "Infant")
+        } else {
+          rn <- c(rn, names(var.names[var.names == df[i,1]]))
+        }
+      }
+      df[,1] <- rn
+      DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
+    }))
+    
+    output$st2plot <- renderPlot(isolate({
+      m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
+      m %>% augment %>% 
+        ggplot(aes(`.std.resid`)) +
+        xlab("Standard Residual") +
+        geom_histogram(binwidth = 0.1, fill = "coral") +
+        scale_x_continuous(expand = c(0,0)) +
+        scale_y_continuous(expand = c(0,0)) +
+        theme(axis.title.y = element_blank(),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.background = element_blank(),
+              panel.border = element_rect(fill = NA, color = "black"))
+    }))
   }) # ----
   
   # data exploration 
