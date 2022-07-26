@@ -114,7 +114,7 @@ ui <- dashboardPage(skin = "green",
               box(width = 12, height = 440, title = "Regression Prediction Results Plot",
                 splitLayout(
                   radioGroupButtons("LRtag", label = NULL, choices = c("Test" = "test", "Train" = "train", "Both" = "both")),
-                  textOutput("LRr2adj")
+                  #textOutput("LRr2adj")
                 ),
                 plotOutput(outputId = "LRabline", height = 330)
               ),
@@ -203,7 +203,7 @@ ui <- dashboardPage(skin = "green",
               conditionalPanel(
                 condition = "input.stattestchoice == 'st2'",
                 selectInput("st2ind", label = "Choose independent variables:",
-                            choices = var.names, multiple = TRUE),
+                            choices = var.names, multiple = TRUE, selected = "height"),
                 uiOutput("st2depUI")
               ),
               actionButton("stattestgo", "Perform Test")
@@ -477,6 +477,8 @@ server <- function(input, output, session) {
         }
       }
       df[,1] <- rn
+      adjr2 <- round(glance(m)[2],3)
+      df <- rbind(list("Adj. R2", adjr2, NA, NA, NA), df)
       DT::datatable(df, rownames = FALSE, options = list(dom = 't', scrollY = 180))
     })
     
@@ -634,7 +636,8 @@ server <- function(input, output, session) {
   # statistical tests ----
   output$st2depUI <- renderUI({
     selectInput("st2dep", label = "Choose dependent variable:",
-                choices = var.names[which(!var.names %in% c(input$st2ind, "sex"))])
+                choices = var.names[which(!var.names %in% c(input$st2ind, "sex"))],
+                selected = var.names[which(!var.names %in% c(input$st2ind, "sex"))][1])
   })
   
   stdata <- eventReactive(input$stattestgo,{
@@ -688,6 +691,8 @@ server <- function(input, output, session) {
         }
       }
       df[,1] <- rn
+      adjr2 <- round(glance(m)[2],3)
+      df <- rbind(list("Adj. R2", adjr2, NA, NA), df)
       DT::datatable(df, rownames = FALSE, options = list(dom = 't'))
     }))
     
@@ -806,7 +811,7 @@ server <- function(input, output, session) {
       p <- data %>% 
         ggplot(aes(x = age, fill = sex, color = sex)) +
         labs(x = "Age (years)", y = "Frequency", fill = "Gender") + 
-        scale_fill_discrete(labels = names(var.names)[2:4]) +
+        scale_fill_discrete(labels = c("Male","Female","Infant")) +
         guides(color = "none") +
         theme(axis.text = element_text(size = 15),
             axis.title = element_text(size = 20),
