@@ -61,27 +61,30 @@ ui <- dashboardPage(skin = "green",
       # prediction models
       tabItem(tabName = "models",
         h1("Data Models"),
-        h4("Linear Regression & Principal Components Analysis"),
+        h4("Linear Regression for Age Prediction & Principal Components Analysis"),
         br(),
         fluidRow(
           column(width = 3,
-            box(width = 12, height = 180, title = "Model Selection",
+            box(width = 12, height = 140, title = "Model Selection",
               selectInput("modelchoice", label = "Select model type:",
                           choices = c("Linear Regression" = "linreg", "PCA" = "pca"),
-                          selected = "pca"),
-              actionButton("modelgo", label = "Run Model")
+                          selected = "linreg")
             ),
-            box(width = 12, height = 500, title = "Options",
+            box(width = 12, height = 540, title = "Options",
               conditionalPanel(
                 condition = "input.modelchoice == 'linreg'",
                 selectInput("LRvars", label = "Choose independent variables:",
-                            choices = var.names[-9], multiple = TRUE)
+                            choices = var.names[-9], multiple = TRUE,
+                            selected = c("sex", "height", "whole.weight")),
+                sliderInput("splt", "Test/Train Split (Training Proportion)",
+                            min = .5, max = .95, value = .8, step = .05),
+                actionButton("LRgo", "Run Regression Model")
               ),
-              conditionalPanel(
+              conditionalPanel( # PCA ----
                 condition = "input.modelchoice == 'pca'",
                 selectInput("pcaplots", label = "Choose plot:", 
                             choices = c("PCA Scatterplot" = "opt1", "Information Table" = "opt2"),
-                            selected = "opt2"),
+                            selected = "opt1"),
                 conditionalPanel(
                   condition = "input.pcaplots == 'opt1'",
                   h4("Select PCA Components:"),
@@ -94,12 +97,30 @@ ui <- dashboardPage(skin = "green",
                   condition = "input.pcaplots == 'opt2'",
                   selectInput("PCAtableopt", label = "Select Table:",
                               choices = c("Eigenvalues" = "opt1", "Eigenspace Data Coordinates" = "opt2",
-                                          "Variable Correlation w/ PCA Axes" = "opt3"))
+                                          "Variable Correlation w/ PCA Axes" = "opt3")) 
                 )
-              )
+              ) # ----
             )
           ),
           conditionalPanel(
+            condition = "input.modelchoice == 'linreg'",
+            
+            column(width = 5,
+              box(width = 12, height = 440, title = "Regression Prediction Results Plot",
+                radioGroupButtons("LRtag", label = NULL, choices = c("Test" = "test", "Train" = "train", "Both" = "both")),
+                plotOutput(outputId = "LRabline", height = 330)
+              ),
+              box(width = 12, height = 240,
+                plotOutput(outputId = "LRrh", height = 220)
+              )
+            ),
+            column(width = 4,
+              box(width = 12, height = 300
+                
+              )
+            )
+          ),
+          conditionalPanel( # PCA ----
             condition = "input.modelchoice == 'pca'",
             column(width = 9,
               conditionalPanel(
@@ -113,7 +134,7 @@ ui <- dashboardPage(skin = "green",
                 DT::dataTableOutput(outputId = "PCAtable")
               )
             )
-          )
+          ) # ----
           
         )
       ),
@@ -189,10 +210,10 @@ ui <- dashboardPage(skin = "green",
       
       # data exploration ----
       tabItem(tabName = "dataexploration",
-        fluidPage(
-          h1("Data Exploration & Visualization"),
-          h4("Box, Violin, Frequency, and Correlation Plots"),
-          br(),
+        h1("Data Exploration & Visualization"),
+        h4("Box, Violin, Frequency, and Correlation Plots"),
+        br(),
+        fluidRow(
           # selection and options
           column(width = 3,
             # main selection
@@ -285,7 +306,11 @@ ui <- dashboardPage(skin = "green",
       tabItem(tabName = "datatable",
         h1("Abalone Data"),
         br(),
-        DT::dataTableOutput(outputId = 'mydata')
+        fluidRow(
+          column(width = 12,
+            DT::dataTableOutput(outputId = 'mydata')
+          )
+        )
       ), # ----
       
       # about page ----
@@ -338,13 +363,84 @@ ui <- dashboardPage(skin = "green",
 # define server function 
 server <- function(input, output, session) {
   
-  # prediction models
-  output$model_data <- eventReactive(input$modelgo, {
-    
+  LRdata <- eventReactive(input$LRgo, {
+    #w <- row.names(data) %in% sample(1:nrow(data), floor(input$splt*nrow(data)))
+    #data_train <- data[which(w),]
+    #data_test <- data[which(!w),]
+    #m <- lm(paste0("age ~ ", paste(input$LRvars, collapse = " + ")), data = data_train)
+    m <- LRmodel()
+    preds <- predict(m, newdata = data_test)
+    df_test <- data.frame(cbind(data_test[,c(input$LRvars,"age")], preds))
+    df_train <- data.frame(cbind(data_train[,c(input$LRvars,"age")], preds = predict(m)))
+    df_test <- df_test %>% mutate(split = "test", col = case_when(preds > age ~ 1, preds <= age ~ -1))
+    df_train <- df_train %>% mutate(split = "train", col = case_when(preds > age ~ 1, preds <= age ~ -1))
+    df <- union(df_test, df_train)
+    df
   })
   
-  output$LR1 <- renderPlot({
-    m <- lm(paste0("age ~ ", paste(input$LRvars, collapse = " + ")), data = model_data())
+  LRmodel <- eventReactive(input$LRgo, {
+    w <- row.names(data) %in% sample(1:nrow(data), floor(input$splt*nrow(data)))
+    data_train <- data[which(w),]
+    data_test <- data[which(!w),]
+    lm(paste0("age ~ ", paste(input$LRvars, collapse = " + ")), data = data_train)
+  })
+  
+  # prediction models
+  observeEvent(input$LRgo, {
+    output$LR1 <- DT::renderDataTable({
+      DT::datatable(LRdata())
+    })
+    
+    output$LRabline <- renderPlot({
+      if (input$LRtag != "both"){
+        df <- LRdata() %>% filter(split == input$LRtag)
+      } else {
+        df <- LRdata()
+      }
+      df %>%
+        ggplot(aes(x = age, y = preds, color = as.factor(col))) +
+        geom_abline(size = 1, alpha = 0.5) + 
+        geom_point(position = position_jitter(seed = 1)) +
+        scale_x_continuous(breaks = seq(0,50,5)) +
+        scale_y_continuous(breaks = seq(0,50,5)) +
+        xlab("Age (Actual)") +
+        ylab("Age (Predicted)") +
+        theme(legend.position = "none",
+              axis.text = element_text(size = 11),
+              axis.title = element_text(size = 15),
+              panel.border = element_rect(fill = NA, color = "black"))
+    })
+    
+    output$LRrh <- renderPlot({
+      if (input$LRtag != "both"){
+        df <- LRdata() %>% filter(split == input$LRtag)
+      } else {
+        df <- LRdata()
+      }
+      LRmodel()%>% 
+        augment(newdata = df) %>% 
+        ggplot(aes(`.resid`)) +
+        geom_freqpoly(binwidth = 0.1, fill = "coral") +
+        xlab("Residual") +
+        scale_x_continuous(expand = c(0,0)) +
+        scale_y_continuous(expand = c(0,0)) +
+        theme(axis.title.y = element_blank(),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.background = element_blank(),
+              panel.border = element_rect(fill = NA, color = "black"))
+    })
+    
+    output$TEST <- DT::renderDataTable({
+      if (input$LRtag != "both"){
+        df <- LRdata() %>% filter(split == input$LRtag)
+      } else {
+        df <- LRdata()
+      }
+      LRmodel() %>% 
+        augment(newdata = df) %>%
+        DT::datatable()
+    })
   })
   
   # PCA ----
@@ -393,7 +489,7 @@ server <- function(input, output, session) {
     df <- as.data.frame(df) %>% 
       mutate(across(which(sapply(., is.numeric)), signif, 3))
     DT::datatable(df, options = list(scrollX = TRUE))
-  })
+  }) # ----
   
   # data stats and summary ----
   output$dataSummary <- DT::renderDataTable({
