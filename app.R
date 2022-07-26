@@ -40,12 +40,12 @@ ui <- dashboardPage(skin = "green",
   # sidebar
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Data Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
       menuItem("Data Statistics", tabName = "datastat", icon = icon("filter", lib = "glyphicon")),
       menuItem("Data Exploration", tabName = "dataexploration", icon = icon("search", lib = "glyphicon")),
       menuItem("Interactive Visualization", tabName = "visualizations", icon = icon("hand-up", lib = "glyphicon")),
-      menuItem("Data", tabName = "datatable", icon = icon("table")),
-      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon"))
+      menuItem("Data Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
+      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon")),
+      menuItem("Data", tabName = "datatable", icon = icon("table"))
     )
   ),
   
@@ -58,7 +58,7 @@ ui <- dashboardPage(skin = "green",
     
     tabItems(
       
-      # prediction models
+      # prediction models ----
       tabItem(tabName = "models",
         h1("Data Models"),
         h4("Linear Regression for Age Prediction & Principal Components Analysis"),
@@ -80,7 +80,7 @@ ui <- dashboardPage(skin = "green",
                             min = .5, max = .95, value = .8, step = .05),
                 actionButton("LRgo", "Run Regression Model")
               ),
-              conditionalPanel( # PCA ----
+              conditionalPanel(
                 condition = "input.modelchoice == 'pca'",
                 selectInput("pcaplots", label = "Choose plot:", 
                             choices = c("PCA Scatterplot" = "opt1", "Information Table" = "opt2"),
@@ -91,7 +91,12 @@ ui <- dashboardPage(skin = "green",
                   uiOutput("PCAopt1"),
                   uiOutput("PCAopt2"),
                   uiOutput("PCAopt3"),
-                  checkboxInput("incinf", "Include infants?", value = TRUE)
+                  checkboxInput("incinf", "Include infants?", value = TRUE),
+                  br(),
+                  br(),
+                  br(),
+                  br(),
+                  actionBttn("PCAgo", "Show/Refresh Plot", style = "simple", color = "success", size = 'lg', block = TRUE)
                 ),
                 conditionalPanel(
                   condition = "input.pcaplots == 'opt2'",
@@ -99,7 +104,7 @@ ui <- dashboardPage(skin = "green",
                               choices = c("Eigenvalues" = "opt1", "Eigenspace Data Coordinates" = "opt2",
                                           "Variable Correlation w/ PCA Axes" = "opt3")) 
                 )
-              ) # ----
+              )
             )
           ),
           conditionalPanel(
@@ -115,12 +120,30 @@ ui <- dashboardPage(skin = "green",
               )
             ),
             column(width = 4,
-              box(width = 12, height = 300
-                
+              box(width = 12, height = 300, title = "Model Statistics",
+                DT::DTOutput("LRstat")
+              ),
+              box(width = 12, height = 210, title = "Make Prediction",
+                splitLayout(
+                  uiOutput("sexpred"),
+                  uiOutput("lengthpred"),
+                  uiOutput("heightpred"),
+                  uiOutput("diameterpred")
+                ),
+                splitLayout(
+                  uiOutput("wholeweightpred"),
+                  uiOutput("shuckedweightpred"),
+                  uiOutput("visceraweightpred"),
+                  uiOutput("shellweightpred")
+                )
+              ),
+              box(width = 12, height = 150,
+                uiOutput("predictionbutton"),
+                DT::DTOutput("LRpredres")
               )
             )
           ),
-          conditionalPanel( # PCA ----
+          conditionalPanel(
             condition = "input.modelchoice == 'pca'",
             column(width = 9,
               conditionalPanel(
@@ -134,10 +157,10 @@ ui <- dashboardPage(skin = "green",
                 DT::dataTableOutput(outputId = "PCAtable")
               )
             )
-          ) # ----
+          )
           
         )
-      ),
+      ), # ----
       
       # data statistics ----
       tabItem(tabName = "datastat",
@@ -337,7 +360,7 @@ ui <- dashboardPage(skin = "green",
                                    selected = c("male", "female", "infant"),
                                    checkIcon = list(yes = icon("ok", lib = "glyphicon")))
             ),
-            box(width = 12, title = "Plot Options",
+            box(width = 12, height = 410, title = "Plot Options",
               sliderInput(inputId = "alpha", label = "Point opacity:",
                           min = 0.0, max = 1.0, step = 0.1, value = 1.0),
               sliderInput(inputId = "ptsize", label = "Point size:",
@@ -363,11 +386,11 @@ ui <- dashboardPage(skin = "green",
 # define server function 
 server <- function(input, output, session) {
   
+  # linear regression model ----
   LRdata <- eventReactive(input$LRgo, {
-    #w <- row.names(data) %in% sample(1:nrow(data), floor(input$splt*nrow(data)))
-    #data_train <- data[which(w),]
-    #data_test <- data[which(!w),]
-    #m <- lm(paste0("age ~ ", paste(input$LRvars, collapse = " + ")), data = data_train)
+    w <- row.names(data) %in% sample(1:nrow(data), floor(input$splt*nrow(data)))
+    data_train <- data[which(w),]
+    data_test <- data[which(!w),]
     m <- LRmodel()
     preds <- predict(m, newdata = data_test)
     df_test <- data.frame(cbind(data_test[,c(input$LRvars,"age")], preds))
@@ -385,7 +408,6 @@ server <- function(input, output, session) {
     lm(paste0("age ~ ", paste(input$LRvars, collapse = " + ")), data = data_train)
   })
   
-  # prediction models
   observeEvent(input$LRgo, {
     output$LR1 <- DT::renderDataTable({
       DT::datatable(LRdata())
@@ -420,61 +442,139 @@ server <- function(input, output, session) {
       LRmodel()%>% 
         augment(newdata = df) %>% 
         ggplot(aes(`.resid`)) +
-        geom_freqpoly(binwidth = 0.1, fill = "coral") +
+        geom_histogram(binwidth = 0.1, fill = "gray50") +
         xlab("Residual") +
         scale_x_continuous(expand = c(0,0)) +
         scale_y_continuous(expand = c(0,0)) +
         theme(axis.title.y = element_blank(),
+              axis.title.x = element_text(size = 15),
               panel.grid.major = element_blank(),
               panel.grid.minor = element_blank(),
               panel.background = element_blank(),
               panel.border = element_rect(fill = NA, color = "black"))
     })
     
-    output$TEST <- DT::renderDataTable({
-      if (input$LRtag != "both"){
-        df <- LRdata() %>% filter(split == input$LRtag)
-      } else {
-        df <- LRdata()
+    output$LRstat <- DT::renderDataTable({
+      m <- LRmodel()
+      df <- as.data.frame(tidy(m)) %>% mutate(across(.cols = 2:5, signif, 4))
+      colnames(df) <- c("Model Term", "Estimate", "Std. Error", "t-Value", "p-Value")
+      rn <- c("Intercept")
+      for (i in 2:nrow(df)){
+        if (df[i,1] == "sexfemale"){
+          rn <- c(rn, "Female")
+        } else if (df[i,1] == "sexinfant"){
+          rn <- c(rn, "Infant")
+        } else {
+          rn <- c(rn, names(var.names[var.names == df[i,1]]))
+        }
       }
-      LRmodel() %>% 
-        augment(newdata = df) %>%
-        DT::datatable()
+      df[,1] <- rn
+      DT::datatable(df, rownames = FALSE, options = list(dom = 't', scrollY = 200))
     })
-  })
+    
+    observeEvent(input$LRpredictgo, {
+      output$LRpredres <- DT::renderDataTable(isolate({
+        df <- list()
+        for (i in 1:length(input$LRvars)){
+          df[i] <- eval(parse(text = paste0("input$",input$LRvars[i],"pred")))
+        }
+        df <- as.data.frame(df)
+        colnames(df) <- input$LRvars
+        res <- as.data.frame(predict(LRmodel(), newdata = df, interval = "prediction")) %>% 
+          mutate(across(.cols = 1:3, round, 2))
+        colnames(res) <- c("Predicted Age", "Lower", "Upper")
+        DT::datatable(res, rownames = FALSE, options = list(dom = 't'))
+      }))
+    })
+    
+    # Prediction outputs
+    output$sexpred <- renderUI({
+      if ("sex" %in% input$LRvars){
+        selectInput("sexpred", "Sex", choices = c("Male" = "male", "Female" = "female", "Infant" = "infant"))
+      }
+    })
+    
+    output$lengthpred <- renderUI({
+      if ("length" %in% input$LRvars){
+        numericInput("lengthpred", "Length", min = 0, value = 109)
+      }
+    })
+    
+    output$heightpred <- renderUI({
+      if ("height" %in% input$LRvars){
+        numericInput("heightpred", "Height", min = 0, value = 28)
+      }
+    })
+    
+    output$diameterpred <- renderUI({
+      if ("diameter" %in% input$LRvars){
+        numericInput("diameterpred", "Diameter", min = 0, value = 85)
+      }
+    })
+    
+    output$wholeweightpred <- renderUI({
+      if ("whole.weight" %in% input$LRvars){
+        numericInput("whole.weightpred", "Whole Weight", min = 0, value = 160)
+      }
+    })
+    
+    output$shuckedweightpred <- renderUI({
+      if ("shucked.weight" %in% input$LRvars){
+        numericInput("shucked.weightpred", "Shucked Weight", min = 0, value = 67)
+      }
+    })
+    
+    output$visceraweightpred <- renderUI({
+      if ("viscera.weight" %in% input$LRvars){
+        numericInput("viscera.weightpred", "Viscera Weight", min = 0, value = 34)
+      }
+    })
+    
+    output$shellweightpred <- renderUI({
+      if ("shell.weight" %in% input$LRvars){
+        numericInput("shell.weightpred", "Shell Weight", min = 0, value = 47)
+      }
+    })
+    
+    output$predictionbutton <- renderUI({
+      actionBttn("LRpredictgo", "Predict", style = "simple", color = "success", block = TRUE)
+    })
+  }) # ----
   
   # PCA ----
   output$PCAopt1 <- renderUI({
-    r <- if (input$incage){1:8} else {1:7}
+    r <- (if (input$incage){1:8} else {1:7})
     selectInput("PCAcomp1", "Component 1:", choices = r, selected = 1)
   })
   output$PCAopt2 <- renderUI({
-    r <- if (input$incage){1:8} else {1:7}
+    r <- (if (input$incage){1:8} else {1:7})
     selectInput("PCAcomp2", "Component 2:", choices = r, selected = 2)
   })
   output$PCAopt3 <- renderUI({
-    checkboxInput("incage", "Include age?", value = TRUE
-  )})
+    checkboxInput("incage", "Include age?", value = TRUE)
+  })
   
-  output$PCA1 <- renderPlot({
-    axes <- as.integer(c(input$PCAcomp1,input$PCAcomp2))
-    if (input$incinf == FALSE){
-      df <- data %>% filter(!sex == "infant")
-    } else {
-      df <- data
-    }
-    if (input$incage == FALSE){
-      m <- PCA(df[,c(-1,-9)], ncp = 8, graph = FALSE)
-    } else {
-      m <- PCA(df[-1], ncp = 8, graph = FALSE)
-    }
-    fviz_pca(m, axes = axes, repel = TRUE, col.ind = df$age, col.var = "black", label = "var") +
-      scale_color_gradientn(colors = rainbow(length(levels(as.factor(df$age))))) +
-      labs(color = "Age") +
-      theme(plot.title = element_blank(),
-            axis.title = element_text(size = 15),
-            axis.text = element_text(size = 12),
-            legend.title = element_text(size = 14))
+  observeEvent(input$PCAgo, {
+    output$PCA1 <- renderPlot(isolate({
+      axes <- as.integer(c(input$PCAcomp1,input$PCAcomp2))
+      if (input$incinf == FALSE){
+        df <- data %>% filter(!sex == "infant")
+      } else {
+        df <- data
+      }
+      if (input$incage == FALSE){
+        m <- PCA(df[,c(-1,-9)], ncp = 8, graph = FALSE)
+      } else {
+        m <- PCA(df[-1], ncp = 8, graph = FALSE)
+      }
+      fviz_pca(m, axes = axes, repel = TRUE, col.ind = df$age, col.var = "black", label = "var") +
+        scale_color_gradientn(colors = rainbow(length(levels(as.factor(df$age))))) +
+        labs(color = "Age") +
+        theme(plot.title = element_blank(),
+              axis.title = element_text(size = 15),
+              axis.text = element_text(size = 12),
+              legend.title = element_text(size = 14))
+    }))
   })
   
   output$PCAtable <- DT::renderDataTable({
@@ -586,12 +686,13 @@ server <- function(input, output, session) {
     output$st2plot <- renderPlot(isolate({
       m <- lm(paste0(input$st2dep, " ~ ", paste(input$st2ind, collapse = " + ")), data = stdata())
       m %>% augment %>% 
-        ggplot(aes(`.std.resid`)) +
-        xlab("Standard Residual") +
+        ggplot(aes(`.resid`)) +
+        xlab("Residual") +
         geom_histogram(binwidth = 0.1, fill = "coral") +
         scale_x_continuous(expand = c(0,0)) +
         scale_y_continuous(expand = c(0,0)) +
         theme(axis.title.y = element_blank(),
+              axis.title.x = element_text(size = 15),
               panel.grid.major = element_blank(),
               panel.grid.minor = element_blank(),
               panel.background = element_blank(),
