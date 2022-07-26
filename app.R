@@ -43,9 +43,9 @@ ui <- dashboardPage(skin = "green",
       menuItem("Data Statistics", tabName = "datastat", icon = icon("filter", lib = "glyphicon")),
       menuItem("Data Exploration", tabName = "dataexploration", icon = icon("search", lib = "glyphicon")),
       menuItem("Interactive Visualization", tabName = "visualizations", icon = icon("hand-up", lib = "glyphicon")),
-      menuItem("Data Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
-      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon")),
-      menuItem("Data", tabName = "datatable", icon = icon("table"))
+      menuItem("Models", tabName = "models", icon = icon("eye-open", lib = "glyphicon")),
+      menuItem("Data", tabName = "datatable", icon = icon("table")),
+      menuItem("About", tabName = "about", icon = icon("question-sign", lib = "glyphicon"))
     )
   ),
   
@@ -112,7 +112,10 @@ ui <- dashboardPage(skin = "green",
             
             column(width = 5,
               box(width = 12, height = 440, title = "Regression Prediction Results Plot",
-                radioGroupButtons("LRtag", label = NULL, choices = c("Test" = "test", "Train" = "train", "Both" = "both")),
+                splitLayout(
+                  radioGroupButtons("LRtag", label = NULL, choices = c("Test" = "test", "Train" = "train", "Both" = "both")),
+                  textOutput("LRr2adj")
+                ),
                 plotOutput(outputId = "LRabline", height = 330)
               ),
               box(width = 12, height = 240,
@@ -338,8 +341,9 @@ ui <- dashboardPage(skin = "green",
       
       # about page ----
       tabItem(tabName = "about",
-        h1("HELLO WORLD"),
-        p("lorem ipsum")
+        column(width = 8,
+          includeHTML("about.html")
+        )
       ), # ----
       
       # interactive visualization tab ----
@@ -413,6 +417,10 @@ server <- function(input, output, session) {
       DT::datatable(LRdata())
     })
     
+    output$LRr2adj <- renderText({
+      LRmodel() %>% glance %>% select(`adj.r.squared`) %>% pull
+    })
+    
     output$LRabline <- renderPlot({
       if (input$LRtag != "both"){
         df <- LRdata() %>% filter(split == input$LRtag)
@@ -469,7 +477,7 @@ server <- function(input, output, session) {
         }
       }
       df[,1] <- rn
-      DT::datatable(df, rownames = FALSE, options = list(dom = 't', scrollY = 200))
+      DT::datatable(df, rownames = FALSE, options = list(dom = 't', scrollY = 180))
     })
     
     observeEvent(input$LRpredictgo, {

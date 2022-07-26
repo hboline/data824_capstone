@@ -1,0 +1,39 @@
+<style type="text/css">
+	p {
+		font-size: 17px;
+		width: 1200px;
+	}
+</style>
+<body>
+	<h1>About the Data</h1>
+	<p>
+		The dataset used in this project is available from the <a href="https://archive.ics.uci.edu/ml/index.phpv">UCI Machine Learning Repository</a>. The abalone dataset contains physical attributes of abalone such as the length or weight of 4177 <a href="https://en.wikipedia.org/wiki/Abalone">abalone</a>. The purpose of this dataset is to make use of these attributes to predict the age of abalone. The age of an abalone can be found through a meticulous process involving cutting the shell through the cone, staining it, and counting the rings using a microscope. With the difficulty of this process, it is desirable to find a method to predict the age of the abalone accurately using other measurements that are more easily taken. The data comes from a 1994 paper <a href="https://www.researchgate.net/publication/287546509_7he_Population_Biology_of_Abalone_Haliotis_species_in_Tasmania_I_Blacklip_Abalone_H_rubra_from_the_North_Coast_and_Islands_of_Bass_Strait"><i>The Population Biology of Abalone (Halitosis species) in Tasmania</i></a>. 
+	</p>
+	<p>
+		The abalone dataset has no missing entries and only required a minimal amount of manipulation to prepare. The measurements were multiplied by 200 (the original data had this data divided by 200), the age (num. rings + 1.5) was approximated as 1 + num. rings for nicer looking data, and filtered two entries with abnormally high height measurements leaving us with n = 4175 records in the data.
+	</p>
+	<h3>Variable Descriptions</h3>
+	<ul>
+		<li><b>Sex:</b> Sex of abalone. Male, female, or "infant".</li>
+		<li><b>Height:</b> Height of shell (mm).</li>
+		<li><b>Length:</b> Longest shell measurement (mm).</li>
+		<li><b>Diameter:</b> Perpendicular to length (mm).</li>
+		<li><b>Whole Weight:</b> Weight of abalone whole (g).</li>
+		<li><b>Shucked Weight:</b> Weight of abalone meat (g).</li>
+		<li><b>Viscera Weight:</b> Weight of abalone guts after bleeding (g).</li>
+		<li><b>Shell Weight:</b> Weight of abalone shell after drying (g).</li>
+		<li><b>Age:</b> Age of abalone.</li>
+	</ul>
+
+	<h1>About the App</h1>
+	<p>
+		This application was built for the final project in the <a href="https://catalog.ku.edu/search/?P=DATA%20824">DATA 824: Data Visualization</a> at the University of Kansas. The purpose of this app is to showcase various visualizations, interactions with data, and models on the data using R Shiny. The project repository is publically available <a href="https://github.com/hboline/data824_capstone">on GitHub</a>.
+	</p>
+	<h3>Tab Descriptions</h3>
+	<ul>
+		<li><b>Data Statistics:</b> General statistics of abalone dataset. Statistical tests including 2-sample t-test between sex measurements & linear regression tests.</li>
+		<li><b>Data Exploration:</b> Various visualizations. Box plots, frequency plots, violin plots, correlation plot.</li>
+		<li><b>Interactive Visualization:</b> Interactive ggplot + plotly scatterplot with choice of variables & customization of visualization parameters.</li>
+		<li><b>Models:</b> Linear regression for age prediction with interactive prediction & PCA on abalone dataset.</li>
+		<li><b>Data:</b> Interactive data table.</li>
+</body>
